@@ -12,7 +12,7 @@ from .fetch import fetch_daily
 from .model import build_model
 from .parse import CellKind, Grid
 from .score import game_score
-from .solve import Solution, solve_ip
+from .solve import Solution, solve_ip, solve_lp
 
 # How each cell kind is drawn in the terminal render.
 _GLYPH = {
@@ -48,6 +48,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Solve the daily Enclose Horse puzzle.")
     ap.add_argument("--date", default="today", help="'today' or YYYY-MM-DD")
     ap.add_argument("--verbose", action="store_true", help="show solver output")
+    ap.add_argument(
+        "--lp",
+        action="store_true",
+        help="also solve the LP relaxation: ceiling, integrality gap, wall shadow price",
+    )
     args = ap.parse_args(argv)
 
     from .parse import parse_puzzle
@@ -76,6 +81,15 @@ def main(argv: list[str] | None = None) -> int:
     if grid.has_bonus:
         print(f"note            hasBonus={grid.bonus_type!r} (v1 ignores the rule)")
     print(f"solve time      {sol.solve_seconds:.3f}s  ({sol.solver})")
+
+    if args.lp:
+        lp = solve_lp(build_model(grid, relax=True), msg=args.verbose)
+        gap = lp.ceiling - sol.score
+        print()
+        print(f"LP ceiling      {lp.ceiling:.3f}  (fractional upper bound)")
+        print(f"integrality gap {gap:.3f}  (ceiling - IP score)")
+        print(f"next wall worth ~{lp.shadow_price:.2f} tiles  (budget shadow price)")
+        print(f"LP solve time   {lp.solve_seconds:.3f}s  ({lp.solver})")
     return 0
 
 

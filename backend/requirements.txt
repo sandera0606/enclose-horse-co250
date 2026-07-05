@@ -2,4 +2,6 @@ requests>=2.31
 pulp>=2.8,<3          # 3.x is a pre-release that spams deprecation warnings
 highspy>=1.7          # HiGHS engine for pulp.HiGHS (faster than CBC; cleaner LP duals)
 pydantic>=2.6
+fastapi>=0.110        # Phase 3 API layer over the solver
+uvicorn>=0.29         # ASGI server for the FastAPI app
 pytest>=8.0

@@ -47,6 +47,15 @@ class Family:
     def count(self) -> int:
         return len(self.constraints)
 
+    def summary(self) -> dict:
+        """JSON-friendly view for the inspector: name, count, and referenced cells
+        (as ``[row, col]`` pairs, sorted for a stable render)."""
+        return {
+            "name": self.name,
+            "count": self.count,
+            "cells": [[r, c] for r, c in sorted(self.cells)],
+        }
+
 
 @dataclass
 class Model:
@@ -57,15 +66,36 @@ class Model:
     flow: dict[Edge, pulp.LpVariable]
     families: list[Family]
     wall_penalty: int = 0
+    budget: int = 0
+    relaxed: bool = False
 
 
-def build_model(grid: Grid, *, relax: bool = False, wall_penalty: int = 0) -> Model:
+#: Stable name for the budget constraint, so its dual (shadow price) can be read back
+#: after an LP solve as ``model.problem.constraints[BUDGET_ROW].pi`` (Phase 2).
+BUDGET_ROW = "budget"
+
+
+def inspector_families(model: "Model") -> list[dict]:
+    """All constraint families of ``model`` as inspector-ready dicts (feature B)."""
+    return [fam.summary() for fam in model.families]
+
+
+def build_model(
+    grid: Grid,
+    *,
+    relax: bool = False,
+    wall_penalty: int = 0,
+    budget: int | None = None,
+) -> Model:
     """Construct the horse-component MILP for ``grid``.
 
     ``relax=True`` makes E/W continuous in [0,1] (the LP relaxation, for Phase 2).
     ``wall_penalty`` is the per-wall point cost on "costlywalls" days (0 otherwise).
+    ``budget`` overrides the puzzle's wall budget (the sweep varies it); defaults to
+    ``grid.budget``.
     """
     cat = "Continuous" if relax else "Binary"
+    wall_budget = grid.budget if budget is None else budget
     prob = pulp.LpProblem("enclose_horse", pulp.LpMaximize)
 
     passable = grid.enclosable_cells
@@ -109,9 +139,9 @@ def build_model(grid: Grid, *, relax: bool = False, wall_penalty: int = 0) -> Mo
         )
     }
 
-    # 1. Budget.
-    budget_c = pulp.lpSum(W.values()) <= grid.budget
-    prob += budget_c
+    # 1. Budget. Named so the LP dual (shadow price of a wall) is readable by name.
+    budget_c = pulp.lpSum(W.values()) <= wall_budget
+    prob += (budget_c, BUDGET_ROW)
     fam["budget"].add(budget_c, *W.keys())
 
     # 2. Fix horse: always part of its own region.
@@ -174,4 +204,6 @@ def build_model(grid: Grid, *, relax: bool = False, wall_penalty: int = 0) -> Mo
         flow=flow,
         families=list(fam.values()),
         wall_penalty=wall_penalty,
+        budget=wall_budget,
+        relaxed=relax,
     )
