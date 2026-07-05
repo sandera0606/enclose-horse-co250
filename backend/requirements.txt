@@ -1,0 +1,5 @@
+requests>=2.31
+pulp>=2.8,<3          # 3.x is a pre-release that spams deprecation warnings
+highspy>=1.7          # HiGHS engine for pulp.HiGHS (faster than CBC; cleaner LP duals)
+pydantic>=2.6
+pytest>=8.0
